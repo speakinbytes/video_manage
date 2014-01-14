@@ -1,0 +1,335 @@
+package com.rtve.player.customviews;
+
+import java.util.List;
+
+import com.rtve.player.customviews.utils.Constants;
+import com.rtve.playerlib.R;
+import com.rtve.utils.constants.CustomPreferences;
+
+import android.app.ActionBar.LayoutParams;
+import android.content.Intent;
+import android.content.res.Configuration;
+import android.media.MediaPlayer;
+import android.media.MediaPlayer.OnBufferingUpdateListener;
+import android.media.MediaPlayer.OnCompletionListener;
+import android.media.MediaPlayer.OnErrorListener;
+import android.media.MediaPlayer.OnPreparedListener;
+import android.media.MediaPlayer.OnVideoSizeChangedListener;
+import android.os.Bundle;
+import android.support.v4.app.Fragment;
+import android.util.Log;
+import android.view.LayoutInflater;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.view.ViewGroup;
+import android.view.View.OnTouchListener;
+import android.widget.FrameLayout;
+import android.widget.RelativeLayout;
+
+public class PlayerFragment extends Fragment implements
+		OnBufferingUpdateListener, OnCompletionListener, OnPreparedListener,
+		OnVideoSizeChangedListener, OnErrorListener,
+		CustomMediaController.MediaPlayerControl, OnTouchListener, OnClickListener {
+
+	private static final String TAG = "PLAYER_FRAGMENT";
+	private NativeVideoView videoView;
+	private int mills;
+	private CustomMediaController controller;
+	private int[] mVertParams = new int[2], mHoriParams = new int[2];
+	
+
+	/**
+	 * This method will only be called once when the retained Fragment is first
+	 * created.
+	 */
+	@Override
+	public void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+
+		// Retain this fragment across configuration changes.
+		setRetainInstance(true);
+	}
+
+	@Override
+	public void onActivityCreated(Bundle savedInstanceState) {
+
+		super.onActivityCreated(savedInstanceState);
+	}
+
+	@Override
+	public View onCreateView(LayoutInflater inflater, ViewGroup container,
+			Bundle savedInstanceState) {
+
+		View view = inflater
+				.inflate(R.layout.fragment_player, container, false);
+		// VIDEO
+		videoView = (NativeVideoView) view.findViewById(R.id.videoView);
+		controller = new CustomMediaController(getActivity());
+		controller.setMediaPlayer(this);
+		controller.updateFullScreen();
+		controller.setAnchorView((FrameLayout) view
+				.findViewById(R.id.player_control));
+		controller.setEnabled(true);
+		if(getArguments()!=null)
+		{
+			if (getArguments().containsKey(Constants.ARG_PROGRESS))
+				mills = getArguments().getInt(Constants.ARG_PROGRESS, 0);
+
+			if (getArguments().containsKey(Constants.ARG_PLAYLIST)) {
+				controller.setPrevNextListeners(this, this);
+				iniciarPlayList(getArguments().getStringArrayList(Constants.ARG_PLAYLIST));
+			} else if (getArguments().containsKey(Constants.ARG_URL)) {
+				iniciarVideo(getArguments().getString(Constants.ARG_URL));
+			}
+			
+			if (getArguments().containsKey(Constants.ARG_PARAMS_VERT))
+				mVertParams = getArguments().getIntArray(Constants.ARG_PARAMS_VERT);
+			else
+			{
+				mVertParams[0]=LayoutParams.MATCH_PARENT;
+				mVertParams[1]=LayoutParams.WRAP_CONTENT;
+			}
+			if (getArguments().containsKey(Constants.ARG_PARAMS_HOR))
+				mHoriParams = getArguments().getIntArray(Constants.ARG_PARAMS_HOR);
+			else
+			{
+				mHoriParams[0]=LayoutParams.MATCH_PARENT;
+				mHoriParams[1]=LayoutParams.MATCH_PARENT;
+			}
+		}
+	
+		
+		view.setOnTouchListener(new OnTouchListener() {
+
+			@Override
+			public boolean onTouch(View v, MotionEvent event) {
+				controller.show();
+				return false;
+			}
+		});
+		return view;
+	}
+	
+	@Override
+	public void onConfigurationChanged(Configuration newConfig) {
+		super.onConfigurationChanged(newConfig);
+		
+		 // Checks the orientation of the screen
+	    if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+	    	videoView.setLayoutParams(new RelativeLayout.LayoutParams(mHoriParams[0], mHoriParams[1]));
+	    } else if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT){
+	    	videoView.setLayoutParams(new RelativeLayout.LayoutParams(mVertParams[0], mVertParams[1]));
+	    }
+	}
+
+	public void setVideotParams(int w, int h)
+	{
+		videoView.setLayoutParams(new RelativeLayout.LayoutParams(w, h));
+	}
+	
+	public View getVideoLayout()
+	{
+		return videoView;
+	}
+	private void iniciarPlayList(List<String> mPlayList2) {
+		Log.v(TAG, "size " + mPlayList2.size());
+		videoView.iniciarListaDeVideos(mPlayList2, CustomPreferences
+				.getPreferencesDate(getActivity().getApplicationContext()));
+
+	}
+
+	@Override
+	public void onStart() {
+		super.onStart();
+		if (videoView != null)
+			videoView.onStart();
+
+	}
+
+	@Override
+	public void onResume() {
+		super.onResume();
+		if (videoView != null)
+			videoView.onPause();
+	}
+
+	@Override
+	public void onPause() {
+		super.onPause();
+		if (videoView != null)
+			videoView.onPause();
+
+	}
+
+	@Override
+	public void onStop() {
+		super.onStop();
+		if (videoView != null)
+			videoView.onStop();
+
+	}
+
+	@Override
+	public void onDestroy() {
+		super.onDestroy();
+	}
+
+	@Override
+	public void onDestroyView() {
+		super.onDestroyView();
+		if (videoView != null)
+			videoView.onDestroy();
+	}
+
+
+	// INICIAR VIDEO AL DARLE AL PLAY
+	public void iniciarVideo(String url) {
+		videoView.setVisibility(View.VISIBLE);
+		// Log.v(TAG, url);
+
+		if(videoView.isPlaying())
+			videoView.stopPlayback();
+		if (url.contains(".json")) {
+			int fin = url.indexOf(".json");
+			String id1 = url.substring(0, fin);
+			String[] id = id1.split("/");
+			String id_final = id[id.length - 1];
+			videoView.iniciarVideo(id_final, true, null, mills);
+		} else if (url.startsWith("http") && mills == 0)
+			videoView.iniciarVideo(url, false);
+		else if (url.startsWith("http") && mills != 0)
+			videoView.iniciarVideo(url, false, null, mills);
+		else if (!url.startsWith("http")) {
+			videoView.iniciarVideo(url, true, null, mills);
+		}
+
+		videoView.setOnTouchListener(new OnTouchListener() {
+
+			@Override
+			public boolean onTouch(View v, MotionEvent event) {
+				Log.v(TAG, "OnTouch");
+				controller.show();
+				return false;
+			}
+		});
+	}
+	
+	// INICIAR VIDEO AL DARLE AL PLAY
+	public void iniciarVideoByPosition(int i) {
+		videoView.setVisibility(View.VISIBLE);
+		// Log.v(TAG, url);
+
+		if(videoView.isPlaying())
+			videoView.stopPlayback();
+		
+		videoView.playPositionPlayList(i);
+	}
+
+
+	@Override
+	public boolean onError(MediaPlayer arg0, int arg1, int arg2) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public void onVideoSizeChanged(MediaPlayer arg0, int arg1, int arg2) {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public void onPrepared(MediaPlayer arg0) {
+		controller.show();
+	}
+
+	// Implement VideoMediaController.MediaPlayerControl
+	@Override
+	public boolean canPause() {
+		return true;
+	}
+
+	@Override
+	public boolean canSeekBackward() {
+		return true;
+	}
+
+	@Override
+	public boolean canSeekForward() {
+		return true;
+	}
+
+	@Override
+	public int getBufferPercentage() {
+		return 0;
+	}
+
+	@Override
+	public int getCurrentPosition() {
+		return videoView.getCurrentPosition();
+	}
+
+	@Override
+	public int getDuration() {
+		return videoView.getDuration();
+	}
+
+	@Override
+	public boolean isPlaying() {
+		return videoView.isPlaying();
+	}
+
+	@Override
+	public void pause() {
+		videoView.pause();
+	}
+
+	@Override
+	public void seekTo(int i) {
+		videoView.seekTo(i);
+	}
+
+	@Override
+	public void start() {
+		videoView.start();
+	}
+
+	@Override
+	public boolean isFullScreen() {
+		return true;
+	}
+
+	@Override
+	public void toggleFullScreen() {
+		// onBackPressed();
+	}
+
+	@Override
+	public boolean onTouch(View v, MotionEvent event) {
+		controller.show();
+		return false;
+	}
+
+	@Override
+	public void onCompletion(MediaPlayer mp) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void onBufferingUpdate(MediaPlayer mp, int percent) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void onClick(View v) {
+		if(v.getId() == R.id.next)
+			videoView.playNext();
+		else if(v.getId() == R.id.prev)
+			videoView.playNext();
+		
+	}
+
+}

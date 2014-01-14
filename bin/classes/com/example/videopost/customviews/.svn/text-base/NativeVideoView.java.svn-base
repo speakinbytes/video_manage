@@ -1,0 +1,507 @@
+package com.rtve.player.customviews;
+
+import java.io.IOException;
+import java.util.List;
+
+import com.rtve.utils.constants.CustomPreferences;
+import com.rtve.ztnr.encrypt.ZtnrFilterTester;
+
+import android.app.ProgressDialog;
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.media.MediaPlayer;
+import android.media.MediaPlayer.OnCompletionListener;
+import android.media.MediaPlayer.OnErrorListener;
+import android.media.MediaPlayer.OnPreparedListener;
+import android.media.MediaPlayer.OnVideoSizeChangedListener;
+import android.net.Uri;
+import android.os.AsyncTask;
+import android.util.AttributeSet;
+import android.util.Log;
+import android.view.View;
+import android.widget.Toast;
+import android.widget.VideoView;
+import android.view.View.OnClickListener;
+
+/**
+ * Vista del player para RTVE.
+ * 
+ * El player puede ser fijo (por defecto), los controles se encuentran debajo de
+ * video, o relativo, los controles se encuentran una capa por encima del video.
+ * 
+ * Se pueden configurar tanto las imagenes de los botones de control como el
+ * fondo del reproductor y de los controles
+ * 
+ * 
+ */
+public class NativeVideoView extends VideoView implements OnCompletionListener,
+		OnPreparedListener, OnVideoSizeChangedListener, OnClickListener {
+
+	private String TAG = "NativeVideoView";
+	private Context mCtx;
+	private String urlVideo;
+	private List<String> mListaUrlVideos;
+	private int mPosition = 0;
+
+	private final String VIDEO_PREFERENCES = "VIDEO_PREFERENCES";
+	private final String VIDEO_STATE = "VIDEO_STATE";
+
+	private ProgressDialog pd;
+
+	private boolean checkingGeo = false;
+	private Boolean videoIniciado = false;
+	private Boolean isPlaylist = false;
+	private boolean isZtnr;
+	private String fecha = null;
+	private int mMillis = 0;
+
+	private NativeVideoListener mListener;
+	private int mForceHeight;
+	private int mForceWidth;
+
+	/**
+	 * Constructor basico
+	 * 
+	 * @param mCtx
+	 */
+	public NativeVideoView(Context context) {
+		super(context);
+		this.mCtx = context;
+		setOnClickListener(this);
+		this.mForceHeight = getHeight();
+		this.mForceWidth = getWidth();
+	}
+
+	/**
+	 * Contructor
+	 * 
+	 * @param mCtx
+	 * @param attrs
+	 */
+	public NativeVideoView(Context context, AttributeSet attrs) {
+		super(context, attrs);
+		this.mCtx = context;
+		setOnClickListener(this);
+		this.mForceHeight = getHeight();
+		this.mForceWidth = getWidth();
+	}
+
+	public void iniciarVideo(String url, boolean isZtnr) {
+		String date = CustomPreferences.getPreferencesDate(mCtx);
+		fecha = date;
+		setUrlVideo(url);
+		iniciarVideo();
+	}
+
+	public void iniciarVideo(String url, boolean isZtnr, String fecha,
+			int millis) {
+
+		this.fecha = fecha;
+		this.mMillis = millis;
+		setUrlVideo(url);
+		iniciarVideo();
+	}
+
+	public void setIniciado(boolean inic) {
+		this.videoIniciado = inic;
+	}
+
+	public void iniciarListaDeVideos(List<String> listaUrlVideos, String fecha) {
+
+		this.fecha = fecha;
+		setmListaUrlVideos(listaUrlVideos);
+		iniciarVideo();
+	}
+
+	/**
+	 * Metodo que inicia la reproduccion del video
+	 */
+	private void iniciarVideo() {
+
+		try {
+			pd = new ProgressDialog(mCtx);
+			// pd.setMessage(mCtx.getString(R.string.cargando_video));
+			pd.closeOptionsMenu();
+			pd.setCancelable(true);
+			pd.setCanceledOnTouchOutside(false);
+			pd.show();
+
+			Log.v(TAG, "Iniciar video native");
+			new Thread() {
+				public void run() {
+					try {
+						setOnPreparedListener(NativeVideoView.this);
+					} catch (Exception e) {
+						if (pd != null) {
+							pd.dismiss();
+						}
+						Toast.makeText(mCtx, "Error al reproducir el video",
+								Toast.LENGTH_SHORT).show();
+						// Alerts.showAlertDialog(mCtx);
+					}
+
+				}
+			}.start();
+
+			if (isZtnr) {
+				// Cargamos la url del video a mostrar
+				String urlZTNR = "";
+				try {
+					if (urlVideo != null) {
+						urlZTNR = ZtnrFilterTester.getURLZtnr(mCtx, urlVideo,
+								true, null, fecha);
+					} else if (mListaUrlVideos != null
+							&& mListaUrlVideos.size() > 0) {
+
+						urlZTNR = ZtnrFilterTester.getURLZtnr(mCtx,
+								mListaUrlVideos.get(mPosition), true, null,
+								fecha);
+						Log.v(TAG,
+								"URL en play list " + urlZTNR + " id position "
+										+ mListaUrlVideos.get(mPosition));
+					} else {
+						Toast.makeText(mCtx, "No hay video", Toast.LENGTH_SHORT)
+								.show();
+						return;
+					}
+				} catch (IOException e) {
+					pd.dismiss();
+					checkGeo();
+					Log.e(TAG, "IOException checkea geo");
+				}
+
+				if (urlZTNR != null && !urlZTNR.equalsIgnoreCase("")) {
+					NativeVideoView.this.setVideoURI(Uri.parse(urlZTNR));
+				} else {
+
+					pd.dismiss();
+					Toast.makeText(mCtx, "Error al reproducir el video",
+							Toast.LENGTH_SHORT).show();
+
+				}
+			} else {
+
+				Log.v(TAG, Uri.parse(urlVideo).toString());
+				NativeVideoView.this.setVideoURI(Uri.parse(urlVideo));
+			}
+
+		} catch (Exception e) {
+			if (pd != null) {
+				pd.dismiss();
+			}
+			e.printStackTrace();
+			Log.e(TAG, "" + e.getMessage());
+			Toast.makeText(mCtx, "Error al reproducir el video",
+					Toast.LENGTH_SHORT).show();
+		}
+
+		// Cuando el video se completa paramos el servicio de estadisticas y
+		// finalizamos la actividad
+		NativeVideoView.this.setOnCompletionListener(this);
+
+		// Cuando se produce un error en el video, quitamos el processdialog
+		NativeVideoView.this.setOnErrorListener(new OnErrorListener() {
+			public boolean onError(MediaPlayer arg0, int arg1, int arg2) {
+				pd.dismiss();
+				Log.e(TAG, "arga 1 " + arg1 + "arg2 " + arg2);
+				if (!checkingGeo)
+					checkGeo();
+				if (mListener != null)
+					mListener.onErrorListener();
+				return true;
+			}
+		});
+
+	}
+
+	/**
+	 * Metodo que chekea si el video esta geolocalizado
+	 */
+	private void checkGeo() {
+
+		final ZtnrFilterTester consumer = new ZtnrFilterTester();
+
+		AsyncTask<Void, Void, String> loadGeo = new AsyncTask<Void, Void, String>() {
+
+			@Override
+			protected String doInBackground(Void... arg0) {
+
+				checkingGeo = true;
+				return consumer.isGeolocalizado(mCtx);
+
+			}
+
+			@Override
+			protected void onPostExecute(String error) {
+				pd.dismiss();
+				if (!error.equalsIgnoreCase("")) {
+					if (urlVideo.contains(".m3u8")) {
+						Toast.makeText(
+								mCtx,
+								"En estos momentos no hay directo disponible, disculpe las molestias",
+								Toast.LENGTH_SHORT).show();
+					} else {
+						Toast.makeText(mCtx,
+								"No se ha podido reproducir el video",
+								Toast.LENGTH_SHORT).show();
+					}
+
+				} else {
+					if (urlVideo.contains(".m3u8")) {
+						Toast.makeText(
+								mCtx,
+								"En estos momentos no hay directo disponible, disculpe las molestias",
+								Toast.LENGTH_SHORT).show();
+					} else {
+						Toast.makeText(mCtx,
+								"No se ha podido reproducir el video",
+								Toast.LENGTH_SHORT).show();
+					}
+				}
+				checkingGeo = false;
+			}
+
+		};
+
+		loadGeo.execute();
+	}
+
+	/**
+	 * Metodos que controla el video cuando pasa por onResume en un Activity
+	 */
+	public void onResume() {
+
+		if (videoIniciado && !isPlaying()) {
+			seekTo(getLastVideoPosition());
+			start();
+		}
+	}
+
+	/**
+	 * Metodos que controla el video cuando pasa por onStart en un Activity
+	 */
+	public void onStart() {
+		if (videoIniciado && !isPlaying()) {
+			seekTo(getLastVideoPosition());
+			start();
+		}
+	}
+
+	/**
+	 * Metodos que controla el video cuando pasa por onPause en un Activity
+	 */
+	public void onPause() {
+
+		if (isPlaying()) {
+			pause();
+			saveVideoPosition();
+		}
+	}
+
+	/**
+	 * Metodos que controla el video cuando pasa por onStop en un Activity
+	 */
+	public void onStop() {
+
+		if (isPlaying()) {
+			pause();
+			saveVideoPosition();
+		}
+	}
+
+	public void onDestroy() {
+
+		if (NativeVideoView.this != null && NativeVideoView.this.isPlaying()
+				&& NativeVideoView.this.canPause()) {
+			NativeVideoView.this.stopPlayback();
+			videoIniciado = false;
+		}
+	}
+
+	/**
+	 * Metodo que devuelve la ultima posicion del video
+	 * 
+	 * @return ultima posicion reproducida del video
+	 **/
+	private int getLastVideoPosition() {
+		// Restore preferences
+		SharedPreferences settings = mCtx.getSharedPreferences(
+				VIDEO_PREFERENCES, 0);
+		return settings.getInt(VIDEO_STATE, 0);
+	}
+
+	/**
+	 * Metodo para guardar la posicion de reproduccion del video
+	 */
+	private void saveVideoPosition() {
+
+		// We need an Editor object to make preference changes.
+		// All objects are from android.mCtx.mCtx
+		SharedPreferences settings = mCtx.getSharedPreferences(
+				VIDEO_PREFERENCES, 0);
+		SharedPreferences.Editor editor = settings.edit();
+
+		try {
+
+			if (NativeVideoView.this != null) {
+				if (getCurrentPosition() < getDuration()) {
+					editor.putInt(VIDEO_STATE, getCurrentPosition());
+				} else {
+					// Si se ha acabado guardamos el principio
+					editor.putInt(VIDEO_STATE, 0);
+				}
+				// Commit the edits!
+				editor.commit();
+			}
+
+		} catch (IllegalStateException e) {
+			e.printStackTrace();
+		}
+
+	}
+
+	/**
+	 * Metodo que devuelve la url del video a reproducir
+	 * 
+	 * @return urlVideo
+	 */
+	public String getUrlVideo() {
+		return urlVideo;
+	}
+
+	/**
+	 * Metodo que setea la url del video que se va a reproducir
+	 * 
+	 * @param urlVideo
+	 */
+	private void setUrlVideo(String urlVideo) {
+		this.urlVideo = urlVideo;
+		this.mListaUrlVideos = null;
+	}
+
+	/**
+	 * Metodo que devuelve la lista de url de videos que se van a reproducir
+	 * 
+	 * @return mListaUrlVideos
+	 */
+	public List<String> getmListaUrlVideos() {
+		return mListaUrlVideos;
+	}
+
+	/**
+	 * Metodo que setea la lista de url de videos que se van a reproducir
+	 * 
+	 * @param mListaUrlVideos
+	 */
+	private void setmListaUrlVideos(List<String> mListaUrlVideos) {
+		this.mListaUrlVideos = mListaUrlVideos;
+		this.urlVideo = null;
+		this.isPlaylist = true;
+		this.isZtnr = true;
+	}
+
+	public void onCompletion(MediaPlayer mp) {
+		videoIniciado = false;
+		if (isPlaylist) {
+			mPosition++;
+			if (mPosition >= mListaUrlVideos.size()) {
+				mPosition = 0;
+			}
+			iniciarVideo();
+		} else
+			mListener.onCompletionListener();
+	}
+
+	public void playPositionPlayList(int position) {
+		if (mPosition != position) {
+			videoIniciado = false;
+			mPosition = position;
+			iniciarVideo();
+		}
+	}
+
+	public void playNext() {
+		videoIniciado = false;
+		mPosition++;
+		if (mPosition >= mListaUrlVideos.size()) {
+			mPosition = 0;
+		}
+		iniciarVideo();
+
+	}
+
+	public void playBefore() {
+		videoIniciado = false;
+		mPosition--;
+		if (mPosition < 0) {
+			mPosition = 0;
+		}
+		iniciarVideo();
+
+	}
+
+	public void onPrepared(MediaPlayer mp) {
+		pd.dismiss();
+		try {
+			if (mMillis != 0) {
+				seekTo(mMillis);
+			}
+
+			if (!videoIniciado) {
+				mp.setOnVideoSizeChangedListener(this);
+				start();
+				videoIniciado = true;
+				if (mListener != null)
+					mListener.onPrepareListener();
+			}
+		} catch (IllegalStateException e) {
+			Log.e(TAG, e.toString());
+		}
+
+	}
+
+	/*public void setDimensions(int w, int h) {
+		this.mForceHeight = h;
+		this.mForceWidth = w;
+
+	}
+
+	@Override
+	protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+		if(mForceHeight>0 && mForceHeight>0)
+			setMeasuredDimension(mForceWidth, mForceHeight);
+		else
+			setMeasuredDimension(widthMeasureSpec, heightMeasureSpec);
+	}*/
+
+	@Override
+	public void onVideoSizeChanged(MediaPlayer mp, int arg1, int arg2) {
+		if (mListener != null)
+			mListener.onVideoSizeChanged();
+
+	}
+
+	@Override
+	public void onClick(View v) {
+		if (mListener != null)
+			mListener.onClickView();
+	}
+
+	/**
+	 * Clase interna para escuchar los eventos de la clase
+	 */
+	public interface NativeVideoListener {
+
+		public void onErrorListener();
+
+		public void onVideoSizeChanged();
+
+		public void onCompletionListener();
+
+		public void onPrepareListener();
+
+		public void onClickView();
+
+	}
+
+}

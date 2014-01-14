@@ -1,0 +1,435 @@
+package com.rtve.player.customviews;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import com.rtve.player.customviews.utils.Constants;
+import com.rtve.playerlib.R;
+import com.rtve.utils.constants.CustomPreferences;
+
+import android.app.ActionBar.LayoutParams;
+import android.content.Intent;
+import android.content.res.Configuration;
+import android.media.MediaPlayer;
+import android.media.MediaPlayer.OnBufferingUpdateListener;
+import android.media.MediaPlayer.OnCompletionListener;
+import android.media.MediaPlayer.OnErrorListener;
+import android.media.MediaPlayer.OnPreparedListener;
+import android.media.MediaPlayer.OnVideoSizeChangedListener;
+import android.os.Bundle;
+import android.support.v4.app.DialogFragment;
+import android.support.v4.app.Fragment;
+import android.util.Log;
+import android.view.Gravity;
+import android.view.LayoutInflater;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.view.ViewGroup;
+import android.view.View.OnTouchListener;
+import android.view.Window;
+import android.view.WindowManager;
+import android.widget.FrameLayout;
+import android.widget.RelativeLayout;
+
+public class DialogPlayerFragment extends DialogFragment implements
+		OnBufferingUpdateListener, OnCompletionListener, OnPreparedListener,
+		OnVideoSizeChangedListener, OnErrorListener,
+		CustomMediaController.MediaPlayerControl, OnTouchListener, OnClickListener {
+
+	private static final String TAG = "PLAYER_FRAGMENT";
+	private NativeVideoView videoView;
+	private View view;
+	private int mills;
+	private CustomMediaController controller;
+	private int[] mVertParams = new int[2], mHoriParams = new int[2];
+	
+    int mNum;
+
+    /**
+     * Create a new instance of MyDialogFragment, providing "num"
+     * as an argument.
+     */
+    public static DialogPlayerFragment newInstance(int num,ArrayList<String> playList, int[] vert, boolean bBottom) {
+    	DialogPlayerFragment f = new DialogPlayerFragment();
+
+        // Supply num input as an argument.
+        Bundle args = new Bundle();
+        args.putInt("num", num);
+        args.putBoolean("bottom", bBottom);
+        args.putStringArrayList(Constants.ARG_PLAYLIST, playList);
+        if(vert!=null)
+        	args.putIntArray(Constants.ARG_PARAMS_VERT, vert);
+		
+        f.setArguments(args);
+        return f;
+    }
+
+	/**
+	 * This method will only be called once when the retained Fragment is first
+	 * created.
+	 */
+	@Override
+	public void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+
+		// Retain this fragment across configuration changes.
+		setRetainInstance(true);
+		  mNum = getArguments().getInt("num");
+
+	        // Pick a style based on the num.
+	        int style = DialogFragment.STYLE_NORMAL, theme = 0;
+	        switch ((mNum-1)%6) {
+	            case 1: style = DialogFragment.STYLE_NO_TITLE; break;
+	            case 2: style = DialogFragment.STYLE_NO_FRAME; break;
+	            case 3: style = DialogFragment.STYLE_NO_INPUT; break;
+	            case 4: style = DialogFragment.STYLE_NORMAL; break;
+	            case 5: style = DialogFragment.STYLE_NORMAL; break;
+	            case 6: style = DialogFragment.STYLE_NO_TITLE; break;
+	            case 7: style = DialogFragment.STYLE_NO_FRAME; break;
+	            case 8: style = DialogFragment.STYLE_NORMAL; break;
+	        }
+	        switch ((mNum-1)%6) {
+	            case 4: theme = android.R.style.Theme_Holo; break;
+	            case 5: theme = android.R.style.Theme_Holo_Light_Dialog; break;
+	            case 6: theme = android.R.style.Theme_Holo_Light; break;
+	            case 7: theme = android.R.style.Theme_Holo_Light_Panel; break;
+	            case 8: theme = android.R.style.Theme_Holo_Light; break;
+	        }
+	        setStyle(style, theme);
+	}
+
+	@Override
+	public void onActivityCreated(Bundle savedInstanceState) {
+
+		super.onActivityCreated(savedInstanceState);
+	}
+
+	@Override
+	public View onCreateView(LayoutInflater inflater, ViewGroup container,
+			Bundle savedInstanceState) {
+
+		view = inflater
+				.inflate(R.layout.fragment_player, container, false);
+		// VIDEO
+		videoView = (NativeVideoView) view.findViewById(R.id.videoView);
+		controller = new CustomMediaController(getActivity());
+		controller.setMediaPlayer(this);
+		controller.updateFullScreen();
+		controller.setAnchorView((FrameLayout) view
+				.findViewById(R.id.player_control));
+		controller.setEnabled(true);
+		if(getArguments()!=null)
+		{
+			if (getArguments().containsKey(Constants.ARG_PROGRESS))
+				mills = getArguments().getInt(Constants.ARG_PROGRESS, 0);
+
+			if (getArguments().containsKey(Constants.ARG_PLAYLIST)) {
+				controller.setPrevNextListeners(this, this);
+				iniciarPlayList(getArguments().getStringArrayList(Constants.ARG_PLAYLIST));
+			} else if (getArguments().containsKey(Constants.ARG_URL)) {
+				iniciarVideo(getArguments().getString(Constants.ARG_URL));
+			}
+			
+			if (getArguments().containsKey(Constants.ARG_PARAMS_VERT))
+				mVertParams = getArguments().getIntArray(Constants.ARG_PARAMS_VERT);
+			else
+			{
+				mVertParams[0]=LayoutParams.MATCH_PARENT;
+				mVertParams[1]=LayoutParams.WRAP_CONTENT;
+			}
+			if (getArguments().containsKey(Constants.ARG_PARAMS_HOR))
+				mHoriParams = getArguments().getIntArray(Constants.ARG_PARAMS_HOR);
+			else
+			{
+				mHoriParams[0]=LayoutParams.MATCH_PARENT;
+				mHoriParams[1]=LayoutParams.MATCH_PARENT;
+			}
+			if (getArguments().containsKey("bottom"))
+			{
+				if(getArguments().getBoolean("bottom"))
+					setBottom();
+			}
+		}
+		
+		 // Checks the orientation of the screen
+	    if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
+	    	videoView.setLayoutParams(new RelativeLayout.LayoutParams(mHoriParams[0], mHoriParams[1]));
+	    } else if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT){
+	    	videoView.setLayoutParams(new RelativeLayout.LayoutParams(mVertParams[0], mVertParams[1]));
+	    }
+	    
+	    
+		view.setOnTouchListener(new OnTouchListener() {
+
+			@Override
+			public boolean onTouch(View v, MotionEvent event) {
+				controller.show();
+				return false;
+			}
+		});
+		return view;
+	}
+	
+
+	public void setBottom()
+	{
+		try
+		{
+		 Window window = getDialog().getWindow();
+
+		    // set "origin" to top left corner, so to speak
+		    window.setGravity(Gravity.BOTTOM|Gravity.RIGHT);
+		    window.setWindowAnimations(android.R.anim.fade_in);
+		    // after that, setting values for x and y works "naturally"
+		    WindowManager.LayoutParams params = window.getAttributes();
+		    params.x = 300;
+		    params.y = 100;
+		    window.setAttributes(params);
+		}catch(NullPointerException e)
+		{
+			FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(mVertParams[0], mVertParams[1]);
+			params.gravity = Gravity.BOTTOM|Gravity.RIGHT;
+			view.setLayoutParams(params);
+			view.invalidate();
+		}
+
+		  //  Log.d(TAG, String.format("Positioning DialogFragment to: x %d; y %d", params.x, params.y));
+	}
+	@Override
+	public void onConfigurationChanged(Configuration newConfig) {
+		super.onConfigurationChanged(newConfig);
+		
+		 // Checks the orientation of the screen
+	    if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+	    	videoView.setLayoutParams(new RelativeLayout.LayoutParams(mHoriParams[0], mHoriParams[1]));
+	    } else if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT){
+	    	videoView.setLayoutParams(new RelativeLayout.LayoutParams(mVertParams[0], mVertParams[1]));
+	    }
+	}
+
+	public void setVideoParams(int w, int h, boolean bVertical)
+	{
+		if(bVertical){
+			mVertParams[0] = w;
+			mVertParams[1] = h;
+		}
+		else
+		{
+			mHoriParams[0] = w;
+			mHoriParams[1] = h;
+		}
+		 // Checks the orientation of the screen
+	    if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
+	    	videoView.setLayoutParams(new RelativeLayout.LayoutParams(mHoriParams[0], mHoriParams[1]));
+	    } else if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT){
+	    	videoView.setLayoutParams(new RelativeLayout.LayoutParams(mVertParams[0], mVertParams[1]));
+	    }
+		
+	}
+	
+	public View getVideoLayout()
+	{
+		return videoView;
+	}
+	private void iniciarPlayList(List<String> mPlayList2) {
+		Log.v(TAG, "size " + mPlayList2.size());
+		videoView.iniciarListaDeVideos(mPlayList2, CustomPreferences
+				.getPreferencesDate(getActivity().getApplicationContext()));
+
+	}
+
+	@Override
+	public void onStart() {
+		super.onStart();
+		if (videoView != null)
+			videoView.onStart();
+
+	}
+
+	@Override
+	public void onResume() {
+		super.onResume();
+		if (videoView != null)
+			videoView.onPause();
+	}
+
+	@Override
+	public void onPause() {
+		super.onPause();
+		if (videoView != null)
+			videoView.onPause();
+
+	}
+
+	@Override
+	public void onStop() {
+		super.onStop();
+		if (videoView != null)
+			videoView.onStop();
+
+	}
+
+	@Override
+	public void onDestroy() {
+		super.onDestroy();
+	}
+
+	@Override
+	public void onDestroyView() {
+		super.onDestroyView();
+		if (videoView != null)
+			videoView.onDestroy();
+	}
+
+
+	// INICIAR VIDEO AL DARLE AL PLAY
+	public void iniciarVideo(String url) {
+		videoView.setVisibility(View.VISIBLE);
+		// Log.v(TAG, url);
+
+		if(videoView.isPlaying())
+			videoView.stopPlayback();
+		if (url.contains(".json")) {
+			int fin = url.indexOf(".json");
+			String id1 = url.substring(0, fin);
+			String[] id = id1.split("/");
+			String id_final = id[id.length - 1];
+			videoView.iniciarVideo(id_final, true, null, mills);
+		} else if (url.startsWith("http") && mills == 0)
+			videoView.iniciarVideo(url, false);
+		else if (url.startsWith("http") && mills != 0)
+			videoView.iniciarVideo(url, false, null, mills);
+		else if (!url.startsWith("http")) {
+			videoView.iniciarVideo(url, true, null, mills);
+		}
+
+		videoView.setOnTouchListener(new OnTouchListener() {
+
+			@Override
+			public boolean onTouch(View v, MotionEvent event) {
+				Log.v(TAG, "OnTouch");
+				controller.show();
+				return false;
+			}
+		});
+	}
+	
+	// INICIAR VIDEO AL DARLE AL PLAY
+	public void iniciarVideoByPosition(int i) {
+		videoView.setVisibility(View.VISIBLE);
+		// Log.v(TAG, url);
+
+		if(videoView.isPlaying())
+			videoView.stopPlayback();
+		
+		videoView.playPositionPlayList(i);
+	}
+
+
+	@Override
+	public boolean onError(MediaPlayer arg0, int arg1, int arg2) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public void onVideoSizeChanged(MediaPlayer arg0, int arg1, int arg2) {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public void onPrepared(MediaPlayer arg0) {
+		controller.show();
+	}
+
+	// Implement VideoMediaController.MediaPlayerControl
+	@Override
+	public boolean canPause() {
+		return true;
+	}
+
+	@Override
+	public boolean canSeekBackward() {
+		return true;
+	}
+
+	@Override
+	public boolean canSeekForward() {
+		return true;
+	}
+
+	@Override
+	public int getBufferPercentage() {
+		return 0;
+	}
+
+	@Override
+	public int getCurrentPosition() {
+		return videoView.getCurrentPosition();
+	}
+
+	@Override
+	public int getDuration() {
+		return videoView.getDuration();
+	}
+
+	@Override
+	public boolean isPlaying() {
+		return videoView.isPlaying();
+	}
+
+	@Override
+	public void pause() {
+		videoView.pause();
+	}
+
+	@Override
+	public void seekTo(int i) {
+		videoView.seekTo(i);
+	}
+
+	@Override
+	public void start() {
+		videoView.start();
+	}
+
+	@Override
+	public boolean isFullScreen() {
+		return true;
+	}
+
+	@Override
+	public void toggleFullScreen() {
+		// onBackPressed();
+	}
+
+	@Override
+	public boolean onTouch(View v, MotionEvent event) {
+		controller.show();
+		return false;
+	}
+
+	@Override
+	public void onCompletion(MediaPlayer mp) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void onBufferingUpdate(MediaPlayer mp, int percent) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void onClick(View v) {
+		if(v.getId() == R.id.next)
+			videoView.playNext();
+		else if(v.getId() == R.id.prev)
+			videoView.playNext();
+		
+	}
+
+}
