@@ -1,5 +1,7 @@
 package com.example.videopost.customviews;
 
+import com.example.videopost.R;
+
 import android.app.ProgressDialog;
 import android.app.ActionBar.LayoutParams;
 import android.content.Context;
@@ -43,14 +45,12 @@ public class CustomVideoView extends VideoView implements OnCompletionListener,
 	private CustomVideoListener mListener;
 
 	/**
-	 * Used by onMeasure to determine what type of size the VideoPlayer should
-	 * be.
+	 * Se usa en onMesare para determinar el tama–o del video player. El ancho
 	 */
 	public int forcedWidth;
 
 	/**
-	 * Used by onMeasure to determine what type of size the VideoPlayer should
-	 * be.
+	 * Se usa en onMesare para determinar el tama–o del video player. El ancho
 	 */
 	public int forcedHeight;
 
@@ -86,13 +86,12 @@ public class CustomVideoView extends VideoView implements OnCompletionListener,
 		try {
 			this.urlVideo = videoUrl;
 			pd = new ProgressDialog(mCtx);
-			// pd.setMessage(mCtx.getString(R.string.cargando_video));
+			pd.setMessage(mCtx.getString(R.string.cargando_video));
 			pd.closeOptionsMenu();
 			pd.setCancelable(true);
 			pd.setCanceledOnTouchOutside(false);
 			pd.show();
 
-			Log.v(TAG, "Iniciar video native");
 			new Thread() {
 				public void run() {
 					try {
@@ -101,9 +100,8 @@ public class CustomVideoView extends VideoView implements OnCompletionListener,
 						if (pd != null) {
 							pd.dismiss();
 						}
-						Toast.makeText(mCtx, "Error al reproducir el video",
+						Toast.makeText(mCtx, mCtx.getString(R.string.error_video),
 								Toast.LENGTH_SHORT).show();
-						// Alerts.showAlertDialog(mCtx);
 					}
 
 				}
@@ -117,7 +115,7 @@ public class CustomVideoView extends VideoView implements OnCompletionListener,
 				pd.dismiss();
 			}
 
-			Toast.makeText(mCtx, "Error al reproducir el video",
+			Toast.makeText(mCtx, mCtx.getString(R.string.error_video),
 					Toast.LENGTH_SHORT).show();
 		}
 
@@ -224,14 +222,6 @@ public class CustomVideoView extends VideoView implements OnCompletionListener,
 
 	}
 
-	/**
-	 * Metodo que devuelve la url del video a reproducir
-	 * 
-	 * @return urlVideo
-	 */
-	public String getUrlVideo() {
-		return urlVideo;
-	}
 
 	public void onCompletion(MediaPlayer mp) {
 		videoIniciado = false;

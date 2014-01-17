@@ -4,5 +4,7 @@
     <string name="app_name">VideoPost</string>
     <string name="action_settings">Settings</string>
     <string name="hello_world">Hello world!</string>
+    <string name="cargando_video">Cargando...</string>
+    <string name="error_video">Error al reproducir el video</string>
 
 </resources>

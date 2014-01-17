@@ -47,18 +47,19 @@ public class PlayerActivity extends FragmentActivity implements OnClickListener 
 
 		getActionBar().setDisplayHomeAsUpEnabled(true);
 		getActionBar().setHomeButtonEnabled(true);
+		
+		// Calculo el tama–o de pantalla
 		WindowManager wm = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
 		Display display = wm.getDefaultDisplay();
 		Point size = new Point();
 		display.getSize(size);
 		width = size.x;
 		height = size.y;
+		
 		addFragment(true);
 		mOrienBtn = (Button) findViewById(R.id.orientation);
 		mOrienBtn.setOnClickListener(this);
-		mSizeBtn = (Button) findViewById(R.id.size);
-		mSizeBtn.setOnClickListener(this);
-
+		
 	}
 
 	private void addFragment(boolean bFullScreen) {
@@ -121,39 +122,17 @@ private int getStatusBarHeight() {
 		super.onConfigurationChanged(newConfig);
 		if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
 
-			if (Build.VERSION.SDK_INT < 16) {
-				getWindow().setFlags(
-						WindowManager.LayoutParams.FLAG_FULLSCREEN,
-						WindowManager.LayoutParams.FLAG_FULLSCREEN);
-			} else {
-				View decorView = getWindow().getDecorView();
-				// Hide the status bar.
-				int uiOptions = View.SYSTEM_UI_FLAG_FULLSCREEN;
-				decorView.setSystemUiVisibility(uiOptions);
-			}
+			
 			// Remember that you should never show the action bar if the
 			// status bar is hidden, so hide that too if necessary.
 			ActionBar actionBar = getActionBar();
 			actionBar.hide();
-			if (!bSmall) {
-				mSizeBtn.setVisibility(View.GONE);
-				mOrienBtn.setVisibility(View.GONE);
-			} else {
-				mSizeBtn.setVisibility(View.VISIBLE);
-				mOrienBtn.setVisibility(View.VISIBLE);
-			}
+			
 
 		}
 		if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT) {
-			View decorView = getWindow().getDecorView();
-			// Hide the status bar.
-			int uiOptions = View.SYSTEM_UI_FLAG_VISIBLE;
-			decorView.setSystemUiVisibility(uiOptions);
-			// Remember that you should never show the action bar if the
-			// status bar is hidden, so hide that too if necessary.
 			ActionBar actionBar = getActionBar();
 			actionBar.show();
-			mSizeBtn.setVisibility(View.VISIBLE);
 			mOrienBtn.setVisibility(View.VISIBLE);
 
 		}
@@ -163,25 +142,13 @@ private int getStatusBarHeight() {
 	@Override
 	public void onClick(View v) {
 		switch (v.getId()) {
-		case R.id.size:
-			if (bSmall) {
-				RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(
-						width, height);
-				params.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-				params.addRule(RelativeLayout.ALIGN_TOP, R.id.orientation);
-				mPlayer.getView().setLayoutParams(params);
-				bSmall = false;
-			} else {
-				RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(
-						320, 180);
-				params.addRule(RelativeLayout.ALIGN_PARENT_RIGHT);
-				params.addRule(RelativeLayout.ALIGN_TOP, R.id.orientation);
-				params.removeRule(RelativeLayout.ALIGN_PARENT_TOP);
-				params.addRule(RelativeLayout.ALIGN_PARENT_RIGHT);
-				mPlayer.getView().setLayoutParams(params);
-				mPlayer.setVideoParams(320, 180);
-				bSmall = true;
-			}
+		
+		case R.id.orientation:
+			if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT)
+				setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+			else
+				setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+
 			break;
 
 		}
@@ -193,7 +160,7 @@ private int getStatusBarHeight() {
 		if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE)
 			setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
 		else
-			super.onBackPressed();
+			finish();
 	}
 
 }
