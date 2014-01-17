@@ -1,7 +1,7 @@
 package com.example.videopost.customviews;
 
-
 import android.app.ProgressDialog;
+import android.app.ActionBar.LayoutParams;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.media.MediaPlayer;
@@ -27,7 +27,8 @@ import android.view.View.OnClickListener;
  * 
  */
 public class CustomVideoView extends VideoView implements OnCompletionListener,
-		OnPreparedListener, OnVideoSizeChangedListener, OnErrorListener, OnClickListener {
+		OnPreparedListener, OnVideoSizeChangedListener, OnErrorListener,
+		OnClickListener {
 
 	private String TAG = "CustomVideoView";
 	private Context mCtx;
@@ -42,6 +43,18 @@ public class CustomVideoView extends VideoView implements OnCompletionListener,
 	private CustomVideoListener mListener;
 
 	/**
+	 * Used by onMeasure to determine what type of size the VideoPlayer should
+	 * be.
+	 */
+	public int forcedWidth;
+
+	/**
+	 * Used by onMeasure to determine what type of size the VideoPlayer should
+	 * be.
+	 */
+	public int forcedHeight;
+
+	/**
 	 * Constructor basico
 	 * 
 	 * @param mCtx
@@ -50,6 +63,7 @@ public class CustomVideoView extends VideoView implements OnCompletionListener,
 		super(context);
 		this.mCtx = context;
 		setOnClickListener(this);
+
 	}
 
 	/**
@@ -62,7 +76,6 @@ public class CustomVideoView extends VideoView implements OnCompletionListener,
 		super(context, attrs);
 		this.mCtx = context;
 		setOnClickListener(this);
-	
 	}
 
 	/**
@@ -96,15 +109,14 @@ public class CustomVideoView extends VideoView implements OnCompletionListener,
 				}
 			}.start();
 
-
-				Log.v(TAG, Uri.parse(urlVideo).toString());
-				CustomVideoView.this.setVideoURI(Uri.parse(urlVideo));
+			Log.v(TAG, Uri.parse(urlVideo).toString());
+			CustomVideoView.this.setVideoURI(Uri.parse(urlVideo));
 
 		} catch (Exception e) {
 			if (pd != null) {
-				pd.dismiss();	
+				pd.dismiss();
 			}
-			
+
 			Toast.makeText(mCtx, "Error al reproducir el video",
 					Toast.LENGTH_SHORT).show();
 		}
@@ -258,14 +270,31 @@ public class CustomVideoView extends VideoView implements OnCompletionListener,
 		if (mListener != null)
 			mListener.onClickView();
 	}
-	
+
 	public boolean onError(MediaPlayer arg0, int arg1, int arg2) {
-				pd.dismiss();
-				
-				if (mListener != null)
-					mListener.onErrorListener();
-				return true;
-	}	
+		pd.dismiss();
+
+		if (mListener != null)
+			mListener.onErrorListener();
+		return true;
+	}
+
+	public void onMeasure(int specwidth, int specheight) {
+
+		getHolder().setFixedSize(forcedWidth, forcedHeight);
+		setMeasuredDimension(forcedWidth, forcedHeight);
+	}
+
+	/**
+	 * Resize the view size and request a layout.
+	 */
+	public void changeVideoSize(int newWidth, int newHeight) {
+		forcedWidth = newWidth;
+		forcedHeight = newHeight;
+
+		forceLayout();
+		invalidate();
+	}
 
 	/**
 	 * Clase interna para escuchar los eventos de la clase
